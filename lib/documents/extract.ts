@@ -1,0 +1,4 @@
+import pdf from 'pdf-parse';
+export type DocumentText={documentName:string;pages:{pageNumber:number;text:string}[]};
+export async function extractPdfText(buffer:Buffer, documentName:string):Promise<DocumentText>{ const parsed=await pdf(buffer); const text=(parsed.text||'').trim(); if(!text) throw new Error('No selectable text was found in the PDF. Upload an OCR/searchable copy; scanned-only PDF analysis is not available for this model configuration.'); const approxPages=Math.max(1,Number(parsed.numpages)||1); const size=Math.ceil(text.length/approxPages); const pages=Array.from({length:approxPages},(_,i)=>({pageNumber:i+1,text:text.slice(i*size,(i+1)*size)})); return {documentName,pages}; }
+export function buildPackageText(docs:DocumentText[]){return docs.map(d=>`DOCUMENT: ${d.documentName}\n`+d.pages.map(p=>`[${d.documentName} page ${p.pageNumber}]\n${p.text}`).join('\n')).join('\n\n---\n\n')}

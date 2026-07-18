@@ -1,19 +1,8 @@
 import { NextResponse } from 'next/server';
-import pdf from 'pdf-parse';
-import { analyzeSolicitationText } from '@/lib/analyze';
-export const runtime = 'nodejs';
-export async function POST(request: Request) {
-  try {
-    const form = await request.formData();
-    const file = form.get('file');
-    if (!(file instanceof File)) return NextResponse.json({ error: 'Upload a PDF file.' }, { status: 400 });
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const parsed = await pdf(buffer);
-    const text = parsed.text?.trim();
-    if (!text) return NextResponse.json({ error: 'No selectable text was found in the PDF. Try an OCR copy.' }, { status: 422 });
-    const analysis = await analyzeSolicitationText(text);
-    return NextResponse.json(analysis);
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Analysis failed.' }, { status: 500 });
-  }
-}
+import { analyzeSolicitationText, AnalysisError } from '@/lib/analyze';
+import { buildPackageText, extractPdfText } from '@/lib/documents/extract';
+import { MAX_FILE_COUNT, validatePdfFile } from '@/lib/documents/validate';
+export const runtime='nodejs';
+const buckets=new Map<string,{count:number;reset:number}>();
+function rateLimit(ip:string){const now=Date.now(); const b=buckets.get(ip); if(!b||b.reset<now){buckets.set(ip,{count:1,reset:now+60_000});return false} b.count++; return b.count>10}
+export async function POST(request:Request){const requestId=crypto.randomUUID(); try{ const ip=request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()||'local'; if(rateLimit(ip)) return NextResponse.json({error:'Too many analysis requests. Please wait and try again.',requestId},{status:429}); const form=await request.formData(); const files=form.getAll('file').filter((f):f is File=>f instanceof File); if(!files.length) return NextResponse.json({error:'Upload one or more PDF files.',requestId},{status:400}); if(files.length>MAX_FILE_COUNT) return NextResponse.json({error:`Upload up to ${MAX_FILE_COUNT} PDF files per analysis.`,requestId},{status:400}); const docs=[]; for(const file of files){const name=await validatePdfFile(file); docs.push(await extractPdfText(Buffer.from(await file.arrayBuffer()),name));} const analysis=await Promise.race([analyzeSolicitationText(buildPackageText(docs),requestId),new Promise((_,rej)=>setTimeout(()=>rej(new AnalysisError('Analysis timed out safely. Try a smaller/OCR-optimized document package.',504)),115000))]) ; return NextResponse.json(analysis,{headers:{'X-Request-Id':requestId}}); }catch(e){const status=e instanceof AnalysisError?e.status: e instanceof Error && e.message.includes('PDF')?400:500; return NextResponse.json({error:e instanceof Error?e.message:'Analysis failed safely.',requestId},{status,headers:{'X-Request-Id':requestId}})} }
