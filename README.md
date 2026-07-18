@@ -72,3 +72,26 @@ Behavioral tests cover pricing outputs, markup vs gross margin, break-even calcu
 - Supplier quote tracking is browser/in-session only.
 - Direct scanned-PDF analysis depends on the configured OpenAI model supporting Responses API file input; otherwise users must upload an OCR/searchable PDF.
 - In-memory rate limiting is not distributed across serverless instances.
+
+## Deterministic scoring and recommendations
+
+Final fit scoring is computed in application code after structured AI extraction and validation. The AI extracts facts, requirements, evidence, unknowns, clarification needs, and candidate compliance items, but BidPilot computes final dimension scores and recommendations deterministically from normalized data.
+
+Weights:
+
+- Technical Fit: 20%
+- Commercial Fit: 12%
+- Compliance Readiness: 20%
+- Delivery Feasibility: 15%
+- Past Performance Fit: 10%
+- Supplier Readiness: 10%
+- Deadline Feasibility: 13%
+
+Recommendation rules:
+
+- `No Bid` requires an active hard stop or confirmed mandatory compliance failure.
+- `Bid` requires a weighted score of at least 70 with no active hard stops and no unresolved clarification gates/questions.
+- `Needs Clarification` / user-facing `Needs Review` is used when unknown bidder capability, missing evidence, unresolved clarification gates, or moderate readiness risk remains.
+- Ordinary solicitation rejection rules such as late-bid rejection, required signatures, forms, submission method, or attachment limits are treated as disqualification risks/hard-stop rules, not active hard stops, unless the current bidder is confirmed unable to comply.
+
+Compliance owner routing distinguishes the recipient of a clarification question from the internal owner responsible for completing the compliance action. Buyer/Contracting Officer should not be assigned as owner of internal bidder tasks; insurance/legal/bonding items route to Legal/Compliance, technical supplier questions route to Supplier / Manufacturer, and administrative readiness routes to Internal Bid Team.
