@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { calculatePricing, pricingScenarios } from '../lib/pricing/calculator';
 import { decideBidFit, normalizeComplianceState, scoreBidReadiness, scoreQualityLabel } from '../lib/decision/score';
 import { JSON_SCHEMA, validateAnalysis } from '../lib/ai/schema';
-import { chunkSolicitationPackage, analyzeSolicitationText, isDirectPdfUnsupportedError } from '../lib/ai/analyze';
+import { chunkSolicitationPackage, analyzeSolicitationText, isDirectPdfUnsupportedError, prepareExtractionText } from '../lib/ai/analyze';
 import { validatePdfFile } from '../lib/documents/validate';
 import { demoAnalysis } from '../lib/demo';
 const base = JSON.parse(JSON.stringify(demoAnalysis));
@@ -26,6 +26,7 @@ test('invalid PDF magic bytes are rejected',async()=>{const f=new File([new Uint
 test('oversized PDFs are rejected',async()=>{const f=new File([new Blob([new Uint8Array(26*1024*1024)])],'big.pdf',{type:'application/pdf'}); await assert.rejects(()=>validatePdfFile(f),/25 MB/);});
 test('empty PDFs are rejected',async()=>{const f=new File([],'empty.pdf',{type:'application/pdf'}); await assert.rejects(()=>validatePdfFile(f),/empty/);});
 test('long package is chunked without dropping tail content',()=>{const tail='TAIL_DEADLINE_REQUIREMENT'; const chunks=chunkSolicitationPackage('A'.repeat(46000)+tail,45000); assert(chunks.length>1); assert(chunks.join('').includes(tail));});
+test('single extraction compaction preserves document tail without repeated AI chunk calls',()=>{const tail='TAIL_DEADLINE_REQUIREMENT'; const compacted=prepareExtractionText(`[test.pdf page 1] ${'A'.repeat(200000)} ${tail}`,120000); assert(compacted.length<=120000); assert(compacted.includes(tail)); assert(compacted.includes('Section compacted'));});
 test('real analysis code path cannot return demoAnalysis when API key missing',async()=>{const old=process.env.OPENAI_API_KEY; delete process.env.OPENAI_API_KEY; await assert.rejects(()=>analyzeSolicitationText('real text','req'),/OpenAI is not configured/); process.env.OPENAI_API_KEY=old;});
 
 test('strict JSON schema requires every object property recursively',()=>{const missing:string[]=[]; function visit(schema:any,path:string){ if(!schema||typeof schema!=='object')return; const types=Array.isArray(schema.type)?schema.type:[schema.type]; if(types.includes('object')&&schema.properties){ const required=new Set(schema.required||[]); for(const key of Object.keys(schema.properties)){ if(!required.has(key)) missing.push(`${path}.${key}`); visit(schema.properties[key],`${path}.${key}`); } } if(schema.items) visit(schema.items,`${path}[]`); } visit(JSON_SCHEMA.schema,'schema'); assert.deepEqual(missing,[]);});

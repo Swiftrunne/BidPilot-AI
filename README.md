@@ -66,6 +66,12 @@ npm audit
 
 Behavioral tests cover pricing outputs, markup vs gross margin, break-even calculations, pricing scenarios, deterministic decision rules, strict schema acceptance/rejection, invalid structural output rejection, invalid PDF magic bytes, oversized PDFs, empty PDFs, long-document chunk retention, and proof that the missing-key real-analysis path cannot return `demoAnalysis`.
 
+### Analysis timeout and extraction performance
+
+Normal searchable PDF packages now use one primary OpenAI extraction request. Long extracted text is compacted once in application code before the request by preserving document/page boundaries, keeping section heads and tails, and retaining final-page content so deadline/requirement material near the end is not silently discarded. Chunk helpers remain available for regression protection, but the production text path no longer performs one model call per chunk plus a blocking synthesis call.
+
+Server timing logs are emitted with the request ID for form parsing, PDF validation, buffer reads, text extraction, document compaction, OpenAI extraction, structured-output parsing, normalization/scoring, direct-PDF fallback, and request completion. Logs are concise timings only and do not include API keys, prompts, or full solicitation text.
+
 ## Known limitations
 
 - No authentication, database persistence, team collaboration, live SAM.gov integration, payment processing, or supplier API integrations are included in this PR.
