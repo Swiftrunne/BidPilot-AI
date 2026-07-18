@@ -30,7 +30,7 @@ export const demoAnalysis: BidAnalysis = {
   positiveDrivers: ['Common commercial products', 'Clear case/each quantities'],
   keyConcerns: ['Freight volatility', 'Short delivery window'],
   complianceMatrix: [{ id: 'CM1', requirement: 'Submit signed bid form before deadline', category: 'Submission', mandatory: true, status: 'Unknown', riskLevel: 'High', evidence: 'Demo submission instructions', pageNumber: 3, documentName: 'demo.pdf', actionNeeded: 'Prepare signed bid package', owner: 'Bid Lead' }],
-  clarificationQuestions: [{ question: 'Are ADA-accepted equivalent toothpaste products acceptable?', whyItMatters: 'Determines supplier eligibility and product compliance.', relatedRequirement: 'Toothpaste equivalency', priority: 'High' }],
+  clarificationQuestions: [{ question: 'Are ADA-accepted equivalent toothpaste products acceptable?', whyItMatters: 'Determines supplier eligibility and product compliance.', relatedRequirement: 'Toothpaste equivalency', priority: 'High', audience: 'Buyer / Contracting Officer' }],
   checklist: [
     { id: 'c1', task: 'Confirm portal registration and signer authority', owner: 'Ops', due: '2026-08-07', status: 'In Progress', riskLevel: 'Medium' },
     { id: 'c2', task: 'Collect supplier quotes and spec sheets', owner: 'Sourcing', due: '2026-08-09', status: 'Not Started', riskLevel: 'High' },
