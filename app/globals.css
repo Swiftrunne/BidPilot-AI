@@ -1,0 +1,2 @@
+@tailwind base;@tailwind components;@tailwind utilities;
+body{background:#f5f7fb;color:#101828}.print-report{display:none}@media print{.no-print{display:none!important}.print-report{display:block}.screen-only{display:none!important}body{background:white}.page-break{break-before:page}}
