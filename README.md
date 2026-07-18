@@ -95,3 +95,7 @@ Recommendation rules:
 - Ordinary solicitation rejection rules such as late-bid rejection, required signatures, forms, submission method, or attachment limits are treated as disqualification risks/hard-stop rules, not active hard stops, unless the current bidder is confirmed unable to comply.
 
 Compliance owner routing distinguishes the recipient of a clarification question from the internal owner responsible for completing the compliance action. Buyer/Contracting Officer should not be assigned as owner of internal bidder tasks; insurance/legal/bonding items route to Legal/Compliance, technical supplier questions route to Supplier / Manufacturer, and administrative readiness routes to Internal Bid Team.
+
+### Score stability notes
+
+Final V2 scores do not use model-authored numeric fit values. The deterministic scorer converts validated canonical statuses into bounded states: Confirmed, Unknown / Needs Clarification, Noncompliant, and Not Applicable. Equivalent wording in the model response must first normalize into those canonical states, and only those states feed the score. Empty bidder profile readiness is treated consistently as Unknown / Needs Clarification, not as an active hard stop. Scorecard labels distinguish score quality from confidence: score quality follows 0–39 Low, 40–69 Medium, 70–84 Good, and 85–100 High, while confidence remains a separate evidence/readiness label.
