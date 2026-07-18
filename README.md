@@ -79,13 +79,13 @@ Final fit scoring is computed in application code after structured AI extraction
 
 Weights:
 
-- Technical Fit: 20%
-- Commercial Fit: 12%
+- Technical Fit: 25%
 - Compliance Readiness: 20%
+- Commercial Fit: 15%
 - Delivery Feasibility: 15%
-- Past Performance Fit: 10%
 - Supplier Readiness: 10%
-- Deadline Feasibility: 13%
+- Past Performance Fit: 5%
+- Deadline Feasibility: 10%
 
 Recommendation rules:
 
@@ -99,3 +99,15 @@ Compliance owner routing distinguishes the recipient of a clarification question
 ### Score stability notes
 
 Final V2 scores do not use model-authored numeric fit values. The deterministic scorer converts validated canonical statuses into bounded states: Confirmed, Unknown / Needs Clarification, Noncompliant, and Not Applicable. Equivalent wording in the model response must first normalize into those canonical states, and only those states feed the score. Empty bidder profile readiness is treated consistently as Unknown / Needs Clarification, not as an active hard stop. Scorecard labels distinguish score quality from confidence: score quality follows 0–39 Low, 40–69 Medium, 70–84 Good, and 85–100 High, while confidence remains a separate evidence/readiness label.
+
+## Canonical requirement architecture
+
+V2 now follows a production decision pipeline: PDF/document extraction → AI evidence extraction → canonical normalization → requirement deduplication → stable requirement IDs → deterministic bidder-state evaluation → deterministic dimension scoring → deterministic overall score → deterministic recommendation. The AI extracts evidence and unresolved requirements, while application code normalizes, deduplicates, classifies, scores, and decides.
+
+Canonical requirements include stable fields such as `canonicalKey`, category, title, mandatory status, source evidence, solicitation status, bidder status, risk level, clarification audience, and action owner. Known procurement concepts map to deterministic IDs such as `SUPPLIER_REGISTRATION`, `TAX_DOCUMENTATION`, `INSURANCE_REQUIREMENTS`, `SUBMISSION_DEADLINE`, `SUBMISSION_METHOD`, `DELIVERY_LEAD_TIME`, `TECHNICAL_COMPLIANCE`, `INSTALLATION_REQUIRED`, `TRAINING_REQUIRED`, and `WARRANTY_REQUIRED`. Solicitation-specific requirements use a deterministic normalized key based on category and normalized requirement meaning.
+
+Normalization lowercases text, strips punctuation/noise words, applies procurement synonym/alias rules, and maps equivalent wording into the same canonical concept. For example, “Supplier must enroll in LSU Workday,” “LSU Workday supplier registration is required,” and “Workday supplier enrollment required” all normalize to `SUPPLIER_REGISTRATION`. “W-9/W-8 required” and “Tax documentation required” normalize to `TAX_DOCUMENTATION`.
+
+Deduplication occurs before scoring. Repeated instances of the same canonical requirement are collapsed into one row, evidence/page/document references are combined, mandatory/risk status is preserved at the highest applicable level, and clarification questions are deduplicated by canonical requirement key.
+
+Canonical bidder states are `Confirmed Compliant`, `Unknown`, `Needs Clarification`, `Confirmed Noncompliant`, and `Not Applicable`. Empty bidder profile fields evaluate to `Unknown` / `Needs Clarification`; they never become `Confirmed Noncompliant` or Active Hard Stops without explicit bidder evidence.
