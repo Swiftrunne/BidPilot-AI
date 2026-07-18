@@ -1,9 +1,0 @@
-import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
-test('real upload analysis never returns demoAnalysis fallback',()=>{const src=fs.readFileSync('lib/ai/analyze.ts','utf8');assert(!src.includes('demoAnalysis'));assert(!src.includes('coerceFallback'));});
-test('missing key path is clear and safe',()=>{const src=fs.readFileSync('lib/ai/analyze.ts','utf8');assert(src.includes('OPENAI_API_KEY'));assert(!src.includes('raw API key'));assert(src.includes('OpenAI is not configured')); });
-test('invalid model response fails safely',()=>{const src=fs.readFileSync('lib/ai/schema.ts','utf8');assert(src.includes('throw new Error'));assert(src.includes('invalid recommendation'));});
-test('schema validation normalizes required metadata',()=>{const src=fs.readFileSync('lib/ai/schema.ts','utf8');for(const k of ['analysisVersion','modelUsed','requestId','generatedAt'])assert(src.includes(k));});
-test('pricing math covers margin markup break-even scenarios',()=>{const src=fs.readFileSync('lib/pricing/calculator.ts','utf8');for(const k of ['grossMargin','markup','breakEvenPrice','Aggressive','Target','Conservative'])assert(src.includes(k));});
-test('file validation rejects invalid files',()=>{const src=fs.readFileSync('lib/documents/validate.ts','utf8');for(const k of ['%PDF-','MAX_FILE_SIZE','MAX_FILE_COUNT','MIME','empty'])assert(src.includes(k));});
-test('long document handling does not use first 60000 chars',()=>{const all=fs.readFileSync('lib/ai/analyze.ts','utf8')+fs.readFileSync('lib/documents/extract.ts','utf8');assert(!all.includes('slice(0, 60000)'));assert(!all.includes('slice(0,60000)'));assert(all.includes('pageNumber'));});
-test('decision logic does not no-bid unknown capability',()=>{const src=fs.readFileSync('lib/decision/score.ts','utf8');assert(src.includes("'Needs Clarification'"));assert(src.indexOf('unknownMandatoryCapabilities')<src.indexOf("'Needs Clarification'"));});

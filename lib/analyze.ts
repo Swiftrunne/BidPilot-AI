@@ -1,1 +1,1 @@
-export { analyzeSolicitationText, AnalysisError } from './ai/analyze';
+export { analyzeSolicitationText, analyzeSolicitationPdfFiles, chunkSolicitationPackage, AnalysisError } from './ai/analyze';

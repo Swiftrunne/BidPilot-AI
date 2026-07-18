@@ -1,13 +1,24 @@
 import OpenAI from 'openai';
-import { normalizeAnalysis, JSON_SCHEMA } from './schema';
+import { validateAnalysis, JSON_SCHEMA } from './schema';
 import { SYSTEM_PROMPT, buildUserPrompt } from './prompts';
 import type { BidAnalysis } from '@/lib/types';
 export class AnalysisError extends Error { status=500; constructor(message:string,status=500){super(message);this.status=status} }
-export async function analyzeSolicitationText(text:string, requestId=crypto.randomUUID()): Promise<BidAnalysis>{
+const MAX_CHUNK_CHARS=45000;
+export async function analyzeSolicitationText(text:string, requestId:string=crypto.randomUUID()): Promise<BidAnalysis>{
  if(!process.env.OPENAI_API_KEY) throw new AnalysisError('OpenAI is not configured. Add OPENAI_API_KEY before analyzing real solicitations.',500);
  if(!text.trim()) throw new AnalysisError('No analyzable solicitation text was found. Upload a searchable PDF or OCR copy.',422);
  const model=process.env.OPENAI_MODEL||'gpt-5.6'; const client=new OpenAI({apiKey:process.env.OPENAI_API_KEY});
- try{ const res:any=await client.responses.create({model,input:[{role:'system',content:SYSTEM_PROMPT},{role:'user',content:buildUserPrompt(text)}],text:{format:{type:'json_schema',...JSON_SCHEMA}}});
- const raw=res.output_text; if(!raw) throw new Error('empty model output'); return normalizeAnalysis(JSON.parse(raw),{modelUsed:model,requestId}); }
- catch(e){ if(e instanceof AnalysisError) throw e; throw new AnalysisError('Solicitation analysis failed safely. No demo data was returned; please retry or verify the document is readable.',502); }
+ try{ const chunks=chunkSolicitationPackage(text); if(chunks.length===1) return await requestStructuredAnalysis(client,model,buildUserPrompt(chunks[0]),requestId);
+  const chunkAnalyses=[]; for(let i=0;i<chunks.length;i++) chunkAnalyses.push(await requestStructuredAnalysis(client,model,`Analyze chunk ${i+1} of ${chunks.length}. Extract only facts/evidence present in this chunk. ${buildUserPrompt(chunks[i])}`,requestId));
+  const synthesisPrompt=`Synthesize the following validated chunk analyses into one final solicitation-package analysis. Preserve documentName and pageNumber only when present in chunk evidence. Do not invent missing facts. If chunks conflict, mark Needs Clarification and explain.\n\n${JSON.stringify(chunkAnalyses)}`;
+  return await requestStructuredAnalysis(client,model,synthesisPrompt,requestId);
+ } catch(e){ if(e instanceof AnalysisError) throw e; throw new AnalysisError(e instanceof Error && e.message.startsWith('Structured analysis validation failed') ? e.message : 'Solicitation analysis failed safely. No demo data was returned; please retry or verify the document is readable.',502); }
+}
+async function requestStructuredAnalysis(client:OpenAI, model:string, prompt:string, requestId:string):Promise<BidAnalysis>{ const res:any=await client.responses.create({model,input:[{role:'system',content:SYSTEM_PROMPT},{role:'user',content:prompt}],text:{format:{type:'json_schema',...JSON_SCHEMA}}}); const raw=res.output_text; if(!raw) throw new Error('empty model output'); let parsed:unknown; try{parsed=JSON.parse(raw)}catch{throw new Error('Structured analysis validation failed: model returned invalid JSON')} return validateAnalysis(parsed,{modelUsed:model,requestId}); }
+export function chunkSolicitationPackage(text:string,maxChars=MAX_CHUNK_CHARS){const sections=text.split(/(?=\nDOCUMENT: |\n\[[^\]]+ page \d+\])/g).filter(Boolean); const chunks:string[]=[]; let current=''; for(const section of sections.length?sections:[text]){ if(section.length>maxChars){ if(current){chunks.push(current); current=''} for(let i=0;i<section.length;i+=maxChars) chunks.push(section.slice(i,i+maxChars)); continue } if(current.length+section.length>maxChars){chunks.push(current); current=section}else current+=section } if(current) chunks.push(current); return chunks; }
+export async function analyzeSolicitationPdfFiles(files:{name:string;buffer:Buffer}[], requestId:string=crypto.randomUUID()): Promise<BidAnalysis>{
+ if(!process.env.OPENAI_API_KEY) throw new AnalysisError('OpenAI is not configured. Add OPENAI_API_KEY before analyzing real solicitations.',500);
+ const model=process.env.OPENAI_MODEL||'gpt-5.6'; const client=new OpenAI({apiKey:process.env.OPENAI_API_KEY});
+ try{const fileInputs=files.map(f=>({type:'input_file' as const,filename:f.name,file_data:`data:application/pdf;base64,${f.buffer.toString('base64')}`})); const res:any=await client.responses.create({model,input:[{role:'system',content:SYSTEM_PROMPT},{role:'user',content:[{type:'input_text',text:'Analyze these uploaded solicitation PDF files directly. Use page citations only if the model can reliably identify pages; otherwise omit pageNumber and preserve documentName. Never fabricate OCR results.'},...fileInputs]}],text:{format:{type:'json_schema',...JSON_SCHEMA}}}); const raw=res.output_text; if(!raw) throw new Error('empty model output'); return validateAnalysis(JSON.parse(raw),{modelUsed:model,requestId});}
+ catch{throw new AnalysisError('No selectable PDF text was found, and direct scanned-PDF analysis is not available for the configured model. Upload an OCR/searchable PDF copy.',422)}
 }

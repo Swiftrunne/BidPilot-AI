@@ -1,0 +1,29 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { calculatePricing, pricingScenarios } from '../lib/pricing/calculator';
+import { decideBidFit, scoreBidReadiness } from '../lib/decision/score';
+import { validateAnalysis } from '../lib/ai/schema';
+import { chunkSolicitationPackage, analyzeSolicitationText } from '../lib/ai/analyze';
+import { validatePdfFile } from '../lib/documents/validate';
+import { demoAnalysis } from '../lib/demo';
+const base = JSON.parse(JSON.stringify(demoAnalysis));
+base.analysisVersion='2.1.0';
+for (const key of Object.keys(base.summary)) { base.summary[key].evidence ||= ''; base.summary[key].documentName ||= 'demo.pdf'; }
+for (const field of ['solicitationNumber','department','issuingOffice','solicitationType','contractType','issueDate','questionsDeadline','preBidConference','siteVisit','timezone','periodOfPerformance','setAside','NAICS','PSC','placeOfPerformance','deliveryLocations','portal','email','physicalAddress','requiredEmailSubject','attachmentSizeLimit','numberOfCopies','filenameConventions','awardBasis','evaluationFactors','priceEvaluationMethod','requiredForms','signatures','addendaAcknowledgment','registrations','licenses','certifications','insurance','bonding','samples','warranty','technicalDocumentation','countryOfOriginRequirements','paymentTerms','priceValidity','FOBTerms','freightRequirements','installation','training']) base.summary[field]={value:'Not Found',confidence:'Needs Clarification',status:'Not Found',evidence:'',documentName:''};
+for (const c of base.complianceMatrix) { c.documentName='demo.pdf'; c.evidence ||= 'demo evidence'; }
+for (const c of base.checklist) { c.priority ||= c.riskLevel; c.blocking=!!c.blocking; c.sourceRequirement ||= c.task; }
+base.subScores={technicalFit:{score:70,confidence:'Medium',reasoning:'ok'},commercialFit:{score:70,confidence:'Medium',reasoning:'ok'},complianceReadiness:{score:60,confidence:'Medium',reasoning:'ok'},deliveryFeasibility:{score:60,confidence:'Medium',reasoning:'ok'},pastPerformanceFit:{score:50,confidence:'Needs Clarification',reasoning:'unknown'},supplierReadiness:{score:50,confidence:'Needs Clarification',reasoning:'unknown'},deadlineFeasibility:{score:80,confidence:'Medium',reasoning:'ok'}};
+test('pricing calculation outputs known margin markup and break-even',()=>{const r=calculatePricing({productCost:100,freight:10,otherRiskCost:0,targetMargin:20},2); assert.equal(r.landedUnitCost,110); assert.equal(r.breakEvenPrice,110); assert.equal(Math.round(r.recommendedUnitBidPrice*100)/100,137.5); assert.equal(Math.round(r.grossMargin*10)/10,20); assert.equal(Math.round(r.markup*10)/10,25); assert.equal(r.extendedBidAmount,275);});
+test('pricing scenarios produce aggressive target conservative order',()=>{const s=pricingScenarios({productCost:100,freight:0,otherRiskCost:0,targetMargin:20},1); assert(s.Aggressive.recommendedUnitBidPrice < s.Target.recommendedUnitBidPrice); assert(s.Target.recommendedUnitBidPrice < s.Conservative.recommendedUnitBidPrice);});
+test('decision hard stop yields No Bid',()=>assert.equal(decideBidFit({hardStops:['Deadline passed']}),'No Bid'));
+test('decision unknown mandatory capability yields Needs Clarification',()=>assert.equal(decideBidFit({unknownMandatoryCapabilities:['Insurance limits unknown']}),'Needs Clarification'));
+test('decision no hard stop does not automatically become No Bid',()=>assert.notEqual(decideBidFit({technicalFit:30,commercialFit:30}),'No Bid'));
+test('decision engine returns transparent scoring',()=>{const r=scoreBidReadiness({technicalFit:90,commercialFit:80,complianceReadiness:70,deliveryFeasibility:80,pastPerformanceFit:60,supplierReadiness:70,deadlineFeasibility:90}); assert.equal(r.recommendation,'Bid'); assert(r.opportunityScore.score>0); assert.equal(Object.keys(r.subScores).length,7);});
+test('schema validation accepts complete structured output and stamps metadata',()=>{const out=validateAnalysis(base,{modelUsed:'test-model',requestId:'req-1'}); assert.equal(out.modelUsed,'test-model'); assert.equal(out.requestId,'req-1');});
+test('schema validation rejects malformed critical output',()=>assert.throws(()=>validateAnalysis({recommendation:'Bid'}, {modelUsed:'m',requestId:'r'}),/Structured analysis validation failed/));
+test('normalization does not hide structurally invalid AI responses',()=>{const bad={...base,summary:{}}; assert.throws(()=>validateAnalysis(bad,{modelUsed:'m',requestId:'r'}),/summary\.bidNumber/);});
+test('invalid PDF magic bytes are rejected',async()=>{const f=new File([new Uint8Array([1,2,3])],'bad.pdf',{type:'application/pdf'}); await assert.rejects(()=>validatePdfFile(f),/not a valid PDF/);});
+test('oversized PDFs are rejected',async()=>{const f=new File([new Blob([new Uint8Array(26*1024*1024)])],'big.pdf',{type:'application/pdf'}); await assert.rejects(()=>validatePdfFile(f),/25 MB/);});
+test('empty PDFs are rejected',async()=>{const f=new File([],'empty.pdf',{type:'application/pdf'}); await assert.rejects(()=>validatePdfFile(f),/empty/);});
+test('long package is chunked without dropping tail content',()=>{const tail='TAIL_DEADLINE_REQUIREMENT'; const chunks=chunkSolicitationPackage('A'.repeat(46000)+tail,45000); assert(chunks.length>1); assert(chunks.join('').includes(tail));});
+test('real analysis code path cannot return demoAnalysis when API key missing',async()=>{const old=process.env.OPENAI_API_KEY; delete process.env.OPENAI_API_KEY; await assert.rejects(()=>analyzeSolicitationText('real text','req'),/OpenAI is not configured/); process.env.OPENAI_API_KEY=old;});

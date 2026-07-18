@@ -6,10 +6,11 @@ BidPilot AI V2 turns solicitation PDF packages into an evidence-first opportunit
 
 - `app/api/analyze` validates uploaded PDFs, assigns request IDs, applies bounded in-memory request throttling, extracts searchable text, and calls server-side AI analysis.
 - `app/api/demo` is the only endpoint that returns fictional `demoAnalysis` data.
-- `lib/ai` contains prompts, schema normalization/runtime validation, metadata, and OpenAI Responses API integration. `OPENAI_MODEL` remains configurable.
+- `lib/ai` contains prompts, strict Structured Outputs JSON Schema, robust runtime validation, metadata, chunk analysis, final synthesis, and OpenAI Responses API integration. `OPENAI_MODEL` remains configurable.
 - `lib/documents` contains PDF validation and page-aware package text assembly.
-- `lib/pricing` contains deterministic pricing calculations for margin, markup, break-even price, and aggressive/target/conservative scenarios.
-- `lib/decision` contains transparent bid-fit decision helpers.
+- `lib/pricing` contains deterministic calculations for margin, markup, break-even price, and aggressive/target/conservative scenarios.
+- `lib/decision` contains deterministic bid-fit scoring and hard-stop enforcement.
+- `components/` contains extracted V2 UI panels for bidder profile and supplier quote comparison.
 
 ## Real vs demo separation
 
@@ -17,11 +18,21 @@ Real uploaded solicitations never fall back to fictional demo data. Missing API 
 
 ## Structured AI output and evidence
 
-The analyzer instructs the model to treat solicitation contents as untrusted data, resist prompt injection, avoid invented facts, and classify important fields as `Fact`, `Inference`, `Not Found`, or `Needs Clarification`. Evidence should be concise and may include page and document references when available.
+The analyzer uses strict JSON Schema Structured Outputs (`strict: true`, no arbitrary additional properties) and runtime validation that fails safely when critical V2 structure is missing. The prompt treats solicitation contents as untrusted data, resists prompt injection, avoids invented facts, and classifies important fields as `Fact`, `Inference`, `Not Found`, or `Needs Clarification`.
+
+## Long documents and page evidence
+
+BidPilot no longer sends only the beginning of a document. Searchable PDF text is preserved by document and page when the parser supplies true per-page callbacks. Long packages are split into page/section-aware chunks, each chunk is analyzed for requirements, line items, deadlines, evidence, and risks, and a final synthesis step combines the validated chunk analyses. Tail content is therefore included instead of silently ignored.
+
+Page numbers are shown only when extracted from real parser page callbacks. If reliable page mapping is unavailable, BidPilot preserves `documentName` and omits `pageNumber` rather than fabricating a citation.
+
+## Scanned PDFs
+
+When a PDF has no selectable text, BidPilot attempts the official OpenAI Responses API `input_file` path using the configured `OPENAI_MODEL`. If that model/SDK path cannot reliably analyze the PDF directly, the request fails safely with an OCR/searchable-copy message. BidPilot never fabricates OCR output.
 
 ## Bidder Profile and decision framework
 
-The browser-only Bidder Profile panel stores optional capability notes in `localStorage`. Unknown capabilities create clarification gates and lower certainty; they are not automatic No Bid findings. The V2 recommendation includes opportunity score, sub-scores, hard stops, clarification gates, positive drivers, and concerns.
+The browser-only Bidder Profile panel stores optional capability notes in `localStorage`. Unknown capabilities create clarification gates and lower certainty; they are not automatic No Bid findings. Deterministic decision support considers hard stops, clarification gates, deadline feasibility, technical fit, commercial fit, compliance readiness, delivery feasibility, past performance fit, supplier readiness, known conflicts, and unknown mandatory capabilities. No Bid requires a documented non-remediable hard conflict.
 
 ## File limits and security
 
@@ -30,7 +41,6 @@ The browser-only Bidder Profile panel stores optional capability notes in `local
 - API keys remain server-side and must not be exposed to the browser.
 - Security headers are configured in `next.config.mjs`.
 - In-memory throttling is a best-effort local safeguard for the MVP. Reliable distributed rate limiting on Vercel serverless requires an external datastore and is intentionally documented rather than overstated.
-- Scanned-only PDFs require OCR/searchable text for the current configuration; the app fails safely instead of fabricating analysis.
 
 ## Environment variables
 
@@ -38,6 +48,10 @@ The browser-only Bidder Profile panel stores optional capability notes in `local
 - `OPENAI_MODEL` — optional configurable model name; defaults to `gpt-5.6` if unset.
 
 Do not commit secrets or real solicitation documents.
+
+## Dependencies
+
+Next.js and `eslint-config-next` are pinned to `15.5.20`, a stable patched 15.x release available in the current lockfile. Canary releases are not used.
 
 ## Testing
 
@@ -50,10 +64,11 @@ npm test
 npm audit
 ```
 
-The tests cover demo separation, missing-key safety, invalid-response safety, schema metadata, pricing math, file validation, long-document handling, and decision behavior for unknown mandatory capabilities.
+Behavioral tests cover pricing outputs, markup vs gross margin, break-even calculations, pricing scenarios, deterministic decision rules, strict schema acceptance/rejection, invalid structural output rejection, invalid PDF magic bytes, oversized PDFs, empty PDFs, long-document chunk retention, and proof that the missing-key real-analysis path cannot return `demoAnalysis`.
 
 ## Known limitations
 
 - No authentication, database persistence, team collaboration, live SAM.gov integration, payment processing, or supplier API integrations are included in this PR.
-- Supplier quote tracking is lightweight and in-session oriented.
-- OCR for scanned PDFs is not enabled unless the configured model and SDK path support direct document/image analysis; otherwise users receive an OCR-required message.
+- Supplier quote tracking is browser/in-session only.
+- Direct scanned-PDF analysis depends on the configured OpenAI model supporting Responses API file input; otherwise users must upload an OCR/searchable PDF.
+- In-memory rate limiting is not distributed across serverless instances.
