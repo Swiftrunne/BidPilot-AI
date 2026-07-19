@@ -117,3 +117,9 @@ Normalization lowercases text, strips punctuation/noise words, applies procureme
 Deduplication occurs before scoring. Repeated instances of the same canonical requirement are collapsed into one row, evidence/page/document references are combined, mandatory/risk status is preserved at the highest applicable level, and clarification questions are deduplicated by canonical requirement key.
 
 Canonical bidder states are `Confirmed Compliant`, `Unknown`, `Needs Clarification`, `Confirmed Noncompliant`, and `Not Applicable`. Empty bidder profile fields evaluate to `Unknown` / `Needs Clarification`; they never become `Confirmed Noncompliant` or Active Hard Stops without explicit bidder evidence.
+
+### Code-owned canonical catalog
+
+Canonical requirement inventory is now owned by application code, not AI prose. `lib/requirements/canonical.ts` defines 23 fixed catalog concepts with IDs, titles, categories, requirement types, default mandatory/risk behavior, action owners, clarification audiences, and deterministic alias rules. AI output can provide raw evidence, category hints, and requirement text, but BidPilot maps that evidence into the catalog before deduplication, compliance-matrix generation, clarification routing, and scoring.
+
+Evidence-to-catalog matching runs known aliases first, then normalized semantic tokens/category compatibility, then deterministic fallback generation only for genuinely solicitation-specific obligations. Measurable LSU/PIV technical thresholds such as 625 Hz / frames per second, acquisition duration, field of view, vector spacing, SNR, and latency all map to the stable `TECHNICAL_COMPLIANCE` parent while preserving evidence details. Dedicated obligations such as installation, training, warranty, laser safety, manufacturer/model identification, Workday registration, tax documentation, hard-copy/electronic submission, and original/redacted copy requirements map to their own catalog IDs.
